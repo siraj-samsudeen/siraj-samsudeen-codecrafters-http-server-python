@@ -13,11 +13,25 @@ def main():
         connection, address = server_socket.accept()  # wait for client
         print("connection from", address)
         client_message = connection.recv(1024).decode()
-        line1 = client_message.splitlines()[0]
-        path = line1.split()[1]
+        headers = client_message.splitlines()
+        path = headers[0].split()[1]
         header_lines = []
         if path == '/':
             header_lines.append('HTTP/1.1 200 OK')
+            header_lines.append("\r\n")
+        elif path.startswith('/user-agent'):
+            header_lines.append('HTTP/1.1 200 OK')
+            header_lines.append('Content-Type: text/plain')
+            for header in headers[1:]:
+                user_agent_prefix = 'User-Agent: '
+                if header.startswith(user_agent_prefix):
+                    user_agent = header.removeprefix(user_agent_prefix).strip()
+                    break
+            header_lines.append(f'Content-Length: {len(user_agent.encode())}')
+            header_lines.append("")
+            header_lines.append(user_agent)
+            print(f"{path=}, {user_agent=}")
+            
         elif path.startswith('/echo/'):
             header_lines.append('HTTP/1.1 200 OK')
             header_lines.append('Content-Type: text/plain')
@@ -28,10 +42,10 @@ def main():
             header_lines.append(echo_string)
         else:
             header_lines.append('HTTP/1.1 404 Not Found')
-        header_lines.append("\r\n")
+            header_lines.append("\r\n")
         response = "\r\n".join(header_lines)
         print(f"{repr(response)=}")
-        connection.send(response.encode())
+        connection.sendall(response.encode())
         connection.close()
 
 
