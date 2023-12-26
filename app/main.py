@@ -1,7 +1,8 @@
 # Uncomment this to pass the first stage
 import socket
 import threading
-
+import argparse
+from pathlib import Path
 
 def main():
     # You can use print statements as follows for debugging, they'll be visible when running tests.
@@ -10,17 +11,20 @@ def main():
     # Uncomment this to pass the first stage
 
     server_socket = socket.create_server(("localhost", 4221), reuse_port=True)
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--directory', help="the directory to server files from")
+    args = parser.parse_args()
     try: 
         while True:
             connection, address = server_socket.accept()  # wait for client
             print("connection from", address)
             client_thread = threading.Thread(
-                target=handle_client, args=(connection, address), daemon=True)
+                target=handle_client, args=(connection,args), daemon=True)
             client_thread.start()
     except KeyboardInterrupt:
         server_socket.close()
 
-def handle_client(connection, address):
+def handle_client(connection,args):
     client_message = connection.recv(1024).decode()
     headers = client_message.splitlines()
     path = headers[0].split()[1]
@@ -28,6 +32,22 @@ def handle_client(connection, address):
     if path == '/':
         header_lines.append('HTTP/1.1 200 OK')
         header_lines.append("\r\n")
+    elif path.startswith('/files'):
+        file_name = path.removeprefix('/files/')
+        path = Path(args.directory)
+        file_path = list(path.glob(file_name))
+        print(args.directory, file_name, file_path)
+        if not file_path:
+            header_lines.append('HTTP/1.1 404 Not Found')
+            header_lines.append("\r\n")
+        else:
+            with open(file_path[0]) as file:
+                file_content = file.read()
+            header_lines.append('HTTP/1.1 200 OK')
+            header_lines.append('Content-Type: application/octet-stream')
+            header_lines.append(f'Content-Length: {len(file_content.encode())}')
+            header_lines.append("")
+            header_lines.append(file_content)
     elif path.startswith('/user-agent'):
         header_lines.append('HTTP/1.1 200 OK')
         header_lines.append('Content-Type: text/plain')
